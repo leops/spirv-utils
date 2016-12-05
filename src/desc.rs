@@ -194,6 +194,25 @@ macro_rules! def_bitset {
             }
         }
 
+        impl fmt::Display for $setname {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                if self.is_empty() {
+                    try!(f.write_str("None"));
+                } else {
+                    let mut _first = true;
+                    $(if self.contains($name) {
+                        if !_first {
+                            try!(f.write_str("|"));
+                        }
+                        _first = false;
+                        try!(f.write_str(stringify!($name)));
+                    })+
+                }
+
+                Ok(())
+            }
+        }
+
         $(pub const $name : $setname = $setname($code);)+
     );
 }
