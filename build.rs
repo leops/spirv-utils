@@ -178,8 +178,22 @@ fn gen_insts(insts: &[Instruction], mut dest: CodeFile) -> Result<()> {
         return true;
     }).collect::<Vec<_>>();
 
+    // Generate method for getting the name of the operation this instruction calls
+    try!(dest.start_block("pub fn name(&self) -> &'static str {"));
+    try!(dest.write_line("use self::Instruction::*;"));
+    try!(dest.start_block("match self {"));
+
+    for inst in insts {
+        try!(dest.write_line(&format!("&{0} {{ .. }} => \"Op{0}\",", inst.name)));
+    }
+
+    try!(dest.write_line("_ => \"Unknown\""));
+
+    try!(dest.end_block("}"));
+    try!(dest.end_block("}"));
+
     // Generate method for getting the id of the value this instruction defines, if any.
-    try!(extract_field(&mut dest, "defines_value_inner", false, "ResultId", non_types.iter().cloned(), "result-id"));
+    try!(extract_field(&mut dest, "defines_value_inner", true, "ResultId", non_types.iter().cloned(), "result-id"));
     // Generate method for getting the id of the type of the result of this instruction, if any.
     try!(extract_field(&mut dest, "type_id_of", true, "TypeId", non_types.iter().cloned(), "result-type"));
 
@@ -392,8 +406,8 @@ fn gen_parser(insts: &[Instruction], mut dest: CodeFile) -> Result<()> {
 }
 
 fn gen_writer(insts: &[Instruction], mut dest: CodeFile) -> Result<()> {
-    try!(dest.start_block("pub fn to_bytecode(inst: Instruction) -> Vec<u32> {"));
-    try!(dest.start_block("let mut raw = match inst {"));
+    try!(dest.start_block("pub fn to_raw(inst: Instruction) -> RawInstruction {"));
+    try!(dest.start_block("match inst {"));
 
     for inst in insts {
         if inst.params.len() == 0 {
@@ -451,13 +465,18 @@ fn gen_writer(insts: &[Instruction], mut dest: CodeFile) -> Result<()> {
     }
 
     try!(dest.write_line("_ => unimplemented!()"));
-    try!(dest.end_block("};"));
+    try!(dest.end_block("}"));
+    try!(dest.end_block("}"));
 
+    try!(dest.start_block("pub fn to_binary(raw: RawInstruction) -> Vec<u32> {"));
     try!(dest.write_line("let first_word: [u16; 2] = [raw.opcode, 1 + raw.params.len() as u16];"));
     try!(dest.write_line("let mut res = vec![unsafe { ::std::mem::transmute::<[u16; 2], u32>(first_word) }];"));
-    try!(dest.write_line("res.append(&mut raw.params);"));
-
+    try!(dest.write_line("res.append(&mut raw.params.clone());"));
     try!(dest.write_line("res"));
+    try!(dest.end_block("}"));
+
+    try!(dest.start_block("pub fn to_bytecode(inst: Instruction) -> Vec<u32> {"));
+    try!(dest.write_line("to_binary(to_raw(inst))"));
     dest.end_block("}")
 }
 
